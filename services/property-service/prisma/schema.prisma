@@ -1,0 +1,257 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ==========================================
+// Үл хөдлөх хөрөнгө
+// ==========================================
+
+model Property {
+  id          String   @id @default(uuid())
+  ownerId     String   @map("owner_id")
+  agentId     String?  @map("agent_id")
+
+  // Үндсэн мэдээлэл
+  title       String
+  slug        String   @unique
+  description String
+  type        PropertyType
+  transaction TransactionType
+  status      PropertyStatus @default(DRAFT)
+
+  // Үнэ
+  price           Decimal   @db.Decimal(18, 2)
+  pricePerSqm     Decimal?  @map("price_per_sqm") @db.Decimal(18, 2)
+  currency        String    @default("MNT")
+  isPriceNegotiable Boolean @default(false) @map("is_price_negotiable")
+
+  // Хэмжээ
+  totalArea      Float?  @map("total_area")
+  livingArea     Float?  @map("living_area")
+  landArea       Float?  @map("land_area")
+  rooms          Int?
+  bedrooms       Int?
+  bathrooms      Int?
+  floor          Int?
+  totalFloors    Int?    @map("total_floors")
+  buildingYear   Int?    @map("building_year")
+  parkingSpaces  Int?    @map("parking_spaces")
+
+  // Нэмэлт
+  heating     HeatingType?
+  condition   PropertyCondition?
+  furniture   FurnitureStatus?
+  balcony     Boolean @default(false)
+  elevator    Boolean @default(false)
+  garage      Boolean @default(false)
+  security    Boolean @default(false)
+  playground  Boolean @default(false)
+
+  // Байршил
+  address    String
+  city       String
+  district   String
+  khoroo     String?
+  zipCode    String?  @map("zip_code")
+  latitude   Float?
+  longitude  Float?
+  location   Unsupported("geometry(Point, 4326)")?
+
+  // Хууль
+  cadastralNumber String?  @map("cadastral_number")
+  ownershipType   String?  @map("ownership_type")
+  landUseType     String?  @map("land_use_type")
+
+  // Мета
+  viewCount      Int      @default(0) @map("view_count")
+  favoriteCount  Int      @default(0) @map("favorite_count")
+  inquiryCount   Int      @default(0) @map("inquiry_count")
+  isFeatured     Boolean  @default(false) @map("is_featured")
+  isVerified     Boolean  @default(false) @map("is_verified")
+  verifiedAt     DateTime? @map("verified_at")
+  verifiedBy     String?  @map("verified_by")
+  publishedAt    DateTime? @map("published_at")
+  expiresAt      DateTime? @map("expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  media         PropertyMedia[]
+  priceHistory  PropertyPriceHistory[]
+  favorites     Favorite[]
+  inquiries     Inquiry[]
+  amenities     PropertyAmenity[]
+
+  @@index([ownerId])
+  @@index([agentId])
+  @@index([status])
+  @@index([type, transaction])
+  @@index([city, district])
+  @@index([price])
+  @@index([createdAt])
+  @@index([slug])
+  @@map("properties")
+}
+
+model PropertyMedia {
+  id         String   @id @default(uuid())
+  propertyId String   @map("property_id")
+  url        String
+  thumbnailUrl String? @map("thumbnail_url")
+  type       MediaType @default(IMAGE)
+  title      String?
+  sortOrder  Int      @default(0) @map("sort_order")
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  fileSize   Int?     @map("file_size")
+  width      Int?
+  height     Int?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_media")
+}
+
+model PropertyPriceHistory {
+  id         String   @id @default(uuid())
+  propertyId String   @map("property_id")
+  price      Decimal  @db.Decimal(18, 2)
+  currency   String   @default("MNT")
+  changedAt  DateTime @default(now()) @map("changed_at")
+  reason     String?
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_price_history")
+}
+
+model PropertyAmenity {
+  id         String @id @default(uuid())
+  propertyId String @map("property_id")
+  name       String
+  category   String?
+  icon       String?
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, name])
+  @@map("property_amenities")
+}
+
+model Favorite {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  propertyId String   @map("property_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+model Inquiry {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  propertyId String   @map("property_id")
+  message    String
+  phone      String?
+  email      String?
+  status     InquiryStatus @default(PENDING)
+  repliedAt  DateTime? @map("replied_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([propertyId])
+  @@map("inquiries")
+}
+
+// ==========================================
+// Enums
+// ==========================================
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  LAND
+  OFFICE
+  COMMERCIAL
+  WAREHOUSE
+  GARAGE
+  GERS_DISTRICT
+  OTHER
+}
+
+enum TransactionType {
+  SALE
+  RENT
+  DAILY_RENT
+  AUCTION
+  LEASE
+}
+
+enum PropertyStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  INACTIVE
+  SOLD
+  RENTED
+  EXPIRED
+  REJECTED
+  ARCHIVED
+}
+
+enum HeatingType {
+  CENTRAL
+  ELECTRIC
+  GAS
+  WOOD
+  SOLAR
+  NONE
+}
+
+enum PropertyCondition {
+  NEW
+  EXCELLENT
+  GOOD
+  FAIR
+  NEEDS_RENOVATION
+  UNDER_CONSTRUCTION
+}
+
+enum FurnitureStatus {
+  FULLY_FURNISHED
+  PARTIALLY_FURNISHED
+  UNFURNISHED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  VIRTUAL_TOUR
+  FLOOR_PLAN
+  DOCUMENT
+}
+
+enum InquiryStatus {
+  PENDING
+  READ
+  REPLIED
+  CLOSED
+}

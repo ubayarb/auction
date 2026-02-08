@@ -1,0 +1,38 @@
+# =====================================================
+# ELAND - Next.js Web App Dockerfile
+# =====================================================
+
+FROM node:22-alpine AS base
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+
+# -------- Dependencies --------
+FROM base AS deps
+COPY pnpm-workspace.yaml pnpm-lock.yaml* package.json ./
+COPY packages/shared-types/package.json ./packages/shared-types/
+COPY apps/web/package.json ./apps/web/
+
+RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+
+# -------- Build --------
+FROM base AS build
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules/ ./apps/web/node_modules/
+
+COPY packages/shared-types ./packages/shared-types
+COPY apps/web ./apps/web
+
+WORKDIR /app/apps/web
+RUN npx next build
+
+# -------- Production --------
+FROM base AS production
+ENV NODE_ENV=production
+
+COPY --from=build /app/apps/web/.next/standalone ./
+COPY --from=build /app/apps/web/.next/static ./.next/static
+COPY --from=build /app/apps/web/public/ ./public/
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]

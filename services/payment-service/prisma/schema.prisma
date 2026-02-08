@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// Төлбөр & Эскро
+// ==========================================
+
+model Payment {
+  id            String   @id @default(uuid())
+  contractId    String?  @map("contract_id")
+  auctionId     String?  @map("auction_id")
+  payerId       String   @map("payer_id")
+  payeeId       String   @map("payee_id")
+  escrowId      String?  @map("escrow_id")
+
+  type          PaymentType
+  status        PaymentStatus @default(PENDING)
+  method        PaymentMethod?
+
+  amount        Decimal   @db.Decimal(18, 2)
+  currency      String    @default("MNT")
+  fee           Decimal   @default(0) @db.Decimal(18, 2)
+  netAmount     Decimal?  @map("net_amount") @db.Decimal(18, 2)
+
+  description   String?
+  reference     String?   @unique
+  externalRef   String?   @map("external_ref")
+
+  paidAt        DateTime? @map("paid_at")
+  failedAt      DateTime? @map("failed_at")
+  failureReason String?   @map("failure_reason")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  escrow EscrowAccount? @relation(fields: [escrowId], references: [id])
+
+  @@index([payerId])
+  @@index([payeeId])
+  @@index([contractId])
+  @@index([auctionId])
+  @@index([status])
+  @@map("payments")
+}
+
+model EscrowAccount {
+  id            String   @id @default(uuid())
+  contractId    String?  @map("contract_id")
+  auctionId     String?  @map("auction_id")
+  buyerId       String   @map("buyer_id")
+  sellerId      String   @map("seller_id")
+
+  status        EscrowStatus @default(CREATED)
+  totalAmount   Decimal   @map("total_amount") @db.Decimal(18, 2)
+  fundedAmount  Decimal   @default(0) @map("funded_amount") @db.Decimal(18, 2)
+  releasedAmount Decimal  @default(0) @map("released_amount") @db.Decimal(18, 2)
+  currency      String    @default("MNT")
+
+  fundedAt      DateTime? @map("funded_at")
+  releasedAt    DateTime? @map("released_at")
+  disputedAt    DateTime? @map("disputed_at")
+  closedAt      DateTime? @map("closed_at")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  payments      Payment[]
+  conditions    ReleaseCondition[]
+  ledgerEntries LedgerEntry[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([contractId])
+  @@map("escrow_accounts")
+}
+
+model ReleaseCondition {
+  id          String   @id @default(uuid())
+  escrowId    String   @map("escrow_id")
+  name        String
+  description String?
+  isMet       Boolean  @default(false) @map("is_met")
+  metAt       DateTime? @map("met_at")
+  metBy       String?  @map("met_by")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  escrow EscrowAccount @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+
+  @@index([escrowId])
+  @@map("release_conditions")
+}
+
+model LedgerEntry {
+  id          String   @id @default(uuid())
+  escrowId    String   @map("escrow_id")
+  type        LedgerType
+  amount      Decimal  @db.Decimal(18, 2)
+  balance     Decimal  @db.Decimal(18, 2)
+  description String?
+  reference   String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  escrow EscrowAccount @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+
+  @@index([escrowId])
+  @@map("ledger_entries")
+}
+
+// Enums
+enum PaymentType {
+  PURCHASE
+  RENT
+  DEPOSIT
+  COMMISSION
+  ESCROW_FUND
+  ESCROW_RELEASE
+  REFUND
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CARD
+  QPAY
+  SOCIALPAY
+  MONPAY
+  WALLET
+}
+
+enum EscrowStatus {
+  CREATED
+  FUNDED
+  PARTIALLY_FUNDED
+  RELEASED
+  DISPUTED
+  REFUNDED
+  CLOSED
+}
+
+enum LedgerType {
+  CREDIT
+  DEBIT
+  FEE
+  REFUND
+}

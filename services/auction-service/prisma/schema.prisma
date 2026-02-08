@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// Дуудлага худалдаа
+// ==========================================
+
+model Auction {
+  id          String   @id @default(uuid())
+  propertyId  String   @map("property_id")
+  sellerId    String   @map("seller_id")
+
+  // Мэдээлэл
+  title       String
+  description String?
+  type        AuctionType    @default(ENGLISH)
+  status      AuctionStatus  @default(DRAFT)
+
+  // Үнэ
+  startingPrice    Decimal   @map("starting_price") @db.Decimal(18, 2)
+  reservePrice     Decimal?  @map("reserve_price") @db.Decimal(18, 2)
+  currentPrice     Decimal?  @map("current_price") @db.Decimal(18, 2)
+  bidIncrement     Decimal   @map("bid_increment") @db.Decimal(18, 2)
+  buyNowPrice      Decimal?  @map("buy_now_price") @db.Decimal(18, 2)
+  currency         String    @default("MNT")
+
+  // Хугацаа
+  startTime        DateTime  @map("start_time")
+  endTime          DateTime  @map("end_time")
+  originalEndTime  DateTime  @map("original_end_time")
+  extensionMinutes Int       @default(5) @map("extension_minutes")
+
+  // Барьцаа
+  depositRequired  Boolean   @default(true) @map("deposit_required")
+  depositAmount    Decimal?  @map("deposit_amount") @db.Decimal(18, 2)
+  depositPercent   Float?    @map("deposit_percent")
+
+  // Тоолуур
+  bidCount         Int       @default(0) @map("bid_count")
+  participantCount Int       @default(0) @map("participant_count")
+  viewCount        Int       @default(0) @map("view_count")
+
+  // Ялагч
+  winnerId         String?   @map("winner_id")
+  winningBidId     String?   @map("winning_bid_id")
+  winningPrice     Decimal?  @map("winning_price") @db.Decimal(18, 2)
+
+  // Anti-sniping
+  antiSnipingEnabled  Boolean @default(true) @map("anti_sniping_enabled")
+  antiSnipingMinutes  Int     @default(5) @map("anti_sniping_minutes")
+
+  // Мета
+  terms              String?
+  isPublic           Boolean @default(true) @map("is_public")
+  autoExtend         Boolean @default(true) @map("auto_extend")
+  maxExtensions      Int     @default(10) @map("max_extensions")
+  extensionsUsed     Int     @default(0) @map("extensions_used")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  bids     Bid[]
+  deposits AuctionDeposit[]
+
+  @@index([propertyId])
+  @@index([sellerId])
+  @@index([status])
+  @@index([startTime, endTime])
+  @@index([winnerId])
+  @@map("auctions")
+}
+
+model Bid {
+  id        String   @id @default(uuid())
+  auctionId String   @map("auction_id")
+  bidderId  String   @map("bidder_id")
+  amount    Decimal  @db.Decimal(18, 2)
+  status    BidStatus @default(ACTIVE)
+  isAutoBid Boolean  @default(false) @map("is_auto_bid")
+  maxAmount Decimal? @map("max_amount") @db.Decimal(18, 2)
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+
+  @@index([auctionId])
+  @@index([bidderId])
+  @@index([auctionId, amount(sort: Desc)])
+  @@map("bids")
+}
+
+model AuctionDeposit {
+  id         String   @id @default(uuid())
+  auctionId  String   @map("auction_id")
+  userId     String   @map("user_id")
+  amount     Decimal  @db.Decimal(18, 2)
+  status     DepositStatus @default(PENDING)
+  paidAt     DateTime? @map("paid_at")
+  refundedAt DateTime? @map("refunded_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+
+  @@unique([auctionId, userId])
+  @@index([userId])
+  @@map("auction_deposits")
+}
+
+// ==========================================
+// Enums
+// ==========================================
+
+enum AuctionType {
+  ENGLISH      // Өсөх үнийн
+  DUTCH        // Буурах үнийн
+  SEALED       // Битүү
+  VICKREY      // Хоёр дахь өндөр үнэ
+}
+
+enum AuctionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SCHEDULED
+  ACTIVE
+  EXTENDED
+  ENDED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum BidStatus {
+  ACTIVE
+  OUTBID
+  WINNING
+  WON
+  CANCELLED
+  INVALID
+}
+
+enum DepositStatus {
+  PENDING
+  PAID
+  REFUNDED
+  FORFEITED
+}

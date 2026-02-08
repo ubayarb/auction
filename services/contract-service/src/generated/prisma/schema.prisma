@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Contract {
+  id         String  @id @default(uuid())
+  propertyId String  @map("property_id")
+  buyerId    String  @map("buyer_id")
+  sellerId   String  @map("seller_id")
+  agentId    String? @map("agent_id")
+  notaryId   String? @map("notary_id")
+
+  type   ContractType
+  status ContractStatus @default(DRAFT)
+
+  // Гэрээний дэлгэрэнгүй
+  contractNumber String? @unique @map("contract_number")
+  title          String
+  totalAmount    Decimal @map("total_amount") @db.Decimal(18, 2)
+  currency       String  @default("MNT")
+
+  // Гэрээний нөхцөл
+  terms             String?
+  specialConditions String? @map("special_conditions")
+
+  // Хугацаа
+  startDate       DateTime? @map("start_date")
+  endDate         DateTime? @map("end_date")
+  signingDeadline DateTime? @map("signing_deadline")
+
+  // Түрээсийн нэмэлт
+  monthlyRent  Decimal? @map("monthly_rent") @db.Decimal(18, 2)
+  deposit      Decimal? @db.Decimal(18, 2)
+  rentDuration Int?     @map("rent_duration")
+
+  // Гарын үсэг
+  buyerSignedAt  DateTime? @map("buyer_signed_at")
+  sellerSignedAt DateTime? @map("seller_signed_at")
+  notarySignedAt DateTime? @map("notary_signed_at")
+
+  // Файлууд
+  documentUrl String? @map("document_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  versions ContractVersion[]
+
+  @@index([propertyId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+  @@map("contracts")
+}
+
+model ContractVersion {
+  id         String   @id @default(uuid())
+  contractId String   @map("contract_id")
+  version    Int
+  content    String
+  changedBy  String   @map("changed_by")
+  changeNote String?  @map("change_note")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, version])
+  @@map("contract_versions")
+}
+
+enum ContractType {
+  SALE
+  RENT
+  LEASE
+  AUCTION_SALE
+  PRELIMINARY
+}
+
+enum ContractStatus {
+  DRAFT
+  PENDING_REVIEW
+  BUYER_SIGNED
+  SELLER_SIGNED
+  BOTH_SIGNED
+  NOTARIZED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  DISPUTED
+}

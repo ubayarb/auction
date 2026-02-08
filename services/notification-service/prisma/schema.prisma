@@ -1,0 +1,136 @@
+// =====================================================
+// ELAND - Notification Service Prisma Schema
+// Мэдэгдлийн үйлчилгээний өгөгдлийн бүтэц
+// =====================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== Мэдэгдлийн загвар =====================
+
+model NotificationTemplate {
+  id          String              @id @default(uuid())
+  code        String              @unique // e.g., "AUCTION_BID_PLACED", "CONTRACT_SIGNED"
+  name        String
+  description String?
+  channel     NotificationChannel
+  subject     String? // И-мэйл subject
+  body        String // Template body (Handlebars syntax)
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  notifications Notification[]
+
+  @@map("notification_templates")
+}
+
+// ===================== Мэдэгдэл =====================
+
+model Notification {
+  id          String              @id @default(uuid())
+  userId      String
+  templateId  String?
+  template    NotificationTemplate? @relation(fields: [templateId], references: [id])
+  channel     NotificationChannel
+  type        NotificationType
+  title       String
+  message     String
+  data        Json?               // Нэмэлт мэдээлэл
+  status      NotificationStatus  @default(PENDING)
+  readAt      DateTime?
+  sentAt      DateTime?
+  failedAt    DateTime?
+  failReason  String?
+  retryCount  Int                 @default(0)
+  scheduledAt DateTime?           // Товлосон илгээлт
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, readAt])
+  @@index([status, scheduledAt])
+  @@map("notifications")
+}
+
+// ===================== Хэрэглэгчийн тохиргоо =====================
+
+model UserNotificationSetting {
+  id                    String  @id @default(uuid())
+  userId                String  @unique
+  emailEnabled          Boolean @default(true)
+  pushEnabled           Boolean @default(true)
+  smsEnabled            Boolean @default(false)
+  inAppEnabled          Boolean @default(true)
+  auctionBidNotify      Boolean @default(true)
+  auctionEndNotify      Boolean @default(true)
+  contractUpdateNotify  Boolean @default(true)
+  paymentNotify         Boolean @default(true)
+  propertyInquiryNotify Boolean @default(true)
+  marketingNotify       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_notification_settings")
+}
+
+// ===================== Push Token (FCM) =====================
+
+model DeviceToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  platform  String   // ios, android, web
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("device_tokens")
+}
+
+// ===================== Enums =====================
+
+enum NotificationChannel {
+  EMAIL
+  PUSH
+  SMS
+  IN_APP
+}
+
+enum NotificationType {
+  AUCTION_BID_PLACED
+  AUCTION_OUTBID
+  AUCTION_WON
+  AUCTION_ENDED
+  AUCTION_STARTING
+  CONTRACT_CREATED
+  CONTRACT_SIGNED
+  CONTRACT_COMPLETED
+  PAYMENT_RECEIVED
+  PAYMENT_CONFIRMED
+  ESCROW_FUNDED
+  ESCROW_RELEASED
+  PROPERTY_INQUIRY
+  PROPERTY_APPROVED
+  PROPERTY_REJECTED
+  KYC_APPROVED
+  KYC_REJECTED
+  SYSTEM_ANNOUNCEMENT
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
